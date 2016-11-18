@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<record_update table="sys_script_include">
+    <sys_script_include action="INSERT_OR_UPDATE">
+        <access>package_private</access>
+        <active>true</active>
+        <api_name>x_snc_restapiutils.AttachmentUtil</api_name>
+        <client_callable>false</client_callable>
+        <description/>
+        <name>AttachmentUtil</name>
+        <script><![CDATA[var AttachmentUtil = Class.create();
+AttachmentUtil.prototype = {
+
+	userName : '',
+	passwd : '',
+	restEndPoint : '',
+	
+	initialize: function() {
+		this.userName = gs.getProperty('userName');
+		this.passwd = gs.getProperty('password');
+		this.restEndPoint = gs.getProperty('instanceBaseUrl') + '/api/x_snc_restapiutils/sync_attachments';
+	},
+	
+	
+	deleteAttachment: function(remoteAttachmentSysId){
+		this.initialize();
+		var request = this._createRequest(this.restEndPoint + 'remove/' + remoteAttachmentSysId);
+		var response = request.del();
+	},
+	
+	syncAttachment: function(attachmentSysId, remoteTableSysId, remoteTableName){
+		this.initialize();
+		var attachmentGr = new GlideRecord('sys_attachment');
+		attachmentGr.get(attachmentSysId);
+		return this._copyAttachment(attachmentGr,remoteTableSysId,remoteTableName);
+	},
+	
+	syncAttachments: function(src_table_sys_id,target_table_sys_id, srcTableName, targetTableName){		
+		this.initialize();
+		var attachmentGr = new GlideRecord('sys_attachment');
+		attachmentGr.addQuery('table_name',srcTableName);
+		attachmentGr.addQuery('table_sys_id',src_table_sys_id);
+		attachmentGr.query();
+		
+		while(attachmentGr.next()){
+			this._copyAttachment(attachmentGr,target_table_sys_id,targetTableName);			
+		}
+	},
+	
+	_copyAttachment: function(attachmentGr, toRecordId, toTableName) {
+		var response = {};
+		var payload = {};
+		var request = {};
+		var target_attach_sys_id = '';
+		try {
+			payload = this._getPayload(attachmentGr);
+			request = this._createRequest(this.restEndPoint + 'create/' + toTableName + '/' + toRecordId);
+			response = request.post(payload);
+			response = JSON.parse(response.getBody());
+			target_attach_sys_id = response.result.sys_id;
+			var attachmentDocGr = new GlideRecord('sys_attachment_doc');
+			attachmentDocGr.addQuery('sys_attachment',attachmentGr.sys_id);
+			attachmentDocGr.query();
+			while(attachmentDocGr.next()){
+				payload = this._getPayload(attachmentDocGr);								
+				request = this._createRequest(this.restEndPoint+'chunk/'+target_attach_sys_id);
+				response = request.post(payload);
+				response = JSON.parse(response.getBody());
+				var target_attachdoc_sys_id = response.result.sys_id;
+			}			
+		}catch(ex) {
+			this._log.error('SI', this.type, '_copyAttachment', 'Error occurred while copying attachment ' + payload.file_name +  ex);
+		}
+		return target_attach_sys_id;
+	},
+	
+	_createRequest: function (endpoint) {
+		this._log.audit('SI', this.type, 'createRequest', 'begin');
+		var request = new GlideHTTPRequest(endpoint);
+		request.setBasicAuth(this.userName, this.passwd);
+		request.addHeader('Accept', 'application/json');
+		request.addHeader('Content-Type', 'application/json');
+		this._log.audit('SI', this.type, 'createRequest', 'end');
+		return request;
+	},
+	
+	_getPayload: function(record) {
+		var fields = new GlideRecordUtil().getFields(record);
+		var resultObject = {};
+		var field;
+		for (field in fields) {
+			if(!fields[field].startsWith('sys_')){
+				resultObject[fields[field]] = record.getValue(fields[field]);
+			}
+		}
+		return JSON.stringify(resultObject);
+	},
+	
+	type: 'AttachmentUtil'
+};]]></script>
+        <sys_class_name>sys_script_include</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2016-11-18 05:56:17</sys_created_on>
+        <sys_customer_update>true</sys_customer_update>
+        <sys_id>31f687df6f47660067a8c8c17c3ee465</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>AttachmentUtil</sys_name>
+        <sys_package display_value="RestAPIUtils" source="x_snc_restapiutils">f303471f6f47660067a8c8c17c3ee4de</sys_package>
+        <sys_policy>read</sys_policy>
+        <sys_replace_on_upgrade>false</sys_replace_on_upgrade>
+        <sys_scope display_value="RestAPIUtils">f303471f6f47660067a8c8c17c3ee4de</sys_scope>
+        <sys_update_name>sys_script_include_31f687df6f47660067a8c8c17c3ee465</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2016-11-18 05:56:17</sys_updated_on>
+        <u_orig_script/>
+    </sys_script_include>
+</record_update>
